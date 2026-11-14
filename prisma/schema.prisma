@@ -1,0 +1,61 @@
+// Local dev: SQLite. Deploy (Vercel etc.): provider = "postgresql" aur DATABASE_URL me Postgres (Neon/Supabase) URL.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Lead {
+  id                String     @id @default(cuid())
+  subscriberId      String     @unique // ManyChat subscriber id
+  pageId            String?
+  name              String?
+  firstName         String?
+  lastName          String?
+  igUsername        String?
+  igId              String?
+  email             String?
+  phone             String?
+  profilePic        String?
+  gender            String?
+  locale            String?
+  timezone          String?
+  lastInputText     String? // user ka last message / comment
+  liveChatUrl       String?
+  source            String? // kis automation/keyword/post se lead aayi
+  status            String     @default("NEW")
+  dealValue         Float?
+  followUpAt        DateTime?
+  tags              String     @default("[]") // JSON array of tag names
+  customFields      String     @default("{}") // JSON object { fieldName: value }
+  rawPayload        String? // last webhook body (debugging ke liye)
+  subscribedAt      DateTime?
+  lastInteractionAt DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  notes             Note[]
+  activities        Activity[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type      String // CREATED | WEBHOOK | STATUS | SYNC | UPDATE
+  message   String
+  createdAt DateTime @default(now())
+}
