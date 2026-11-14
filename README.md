@@ -27,7 +27,8 @@ npm run dev               # http://localhost:3000
 ## .env
 | Variable | Kya hai |
 |---|---|
-| `DATABASE_URL` | Local: `file:./dev.db` |
+| `DATABASE_URL` | Neon pooled Postgres URL |
+| `DATABASE_URL_UNPOOLED` | Neon direct Postgres URL (`prisma db push` ke liye) |
 | `MANYCHAT_API_TOKEN` | ManyChat → Settings → API → Generate your API Key |
 | `WEBHOOK_SECRET` | Lamba random string; ManyChat request header `x-webhook-secret` me same daalna |
 | `CRM_PASSWORD` | CRM login password |
@@ -63,10 +64,10 @@ npx cloudflared tunnel --url http://localhost:3000
 Jo `https://….trycloudflare.com` URL mile, wahi ManyChat me daalo.
 
 ## Deploy (Vercel)
-SQLite Vercel par kaam nahi karta. [Neon](https://neon.tech) / Supabase se free Postgres lo, phir:
-1. `prisma/schema.prisma` me `provider = "postgresql"`
-2. Vercel env vars me `DATABASE_URL` (Postgres URL) + baaki sab
-3. Ek baar `npx prisma db push` (Postgres URL ke saath)
+Database Neon Postgres hai, isliye local aur Vercel dono same DB use karte hain.
+1. Vercel → Project → Settings → Environment Variables me `.env` ke saare variables daalo (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `MANYCHAT_API_TOKEN`, `WEBHOOK_SECRET`, `CRM_PASSWORD`, `AUTH_SECRET`, `APP_URL`)
+2. Redeploy
+3. Schema badle to: `npx prisma db push`
 
 ## Note
 ManyChat API me "saare subscribers list karo" wala endpoint nahi hai, isliye purani leads automatically import nahi hongi — nayi leads webhook se aayengi. Kisi bhi lead ko detail page par **Sync from ManyChat** se refresh kar sakte ho.

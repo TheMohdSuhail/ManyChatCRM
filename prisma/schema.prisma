@@ -1,11 +1,13 @@
-// Local dev: SQLite. Deploy (Vercel etc.): provider = "postgresql" aur DATABASE_URL me Postgres (Neon/Supabase) URL.
+// Database: Neon Postgres.
+// DATABASE_URL = pooled (app queries), DATABASE_URL_UNPOOLED = direct (prisma db push / migrations)
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model Lead {
