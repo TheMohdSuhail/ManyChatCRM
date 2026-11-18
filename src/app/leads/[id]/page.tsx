@@ -6,17 +6,14 @@ import { addNote, updateLeadDetails } from "@/app/actions";
 import { AppShell } from "@/components/AppShell";
 import { Avatar } from "@/components/Avatar";
 import { StatusBadge } from "@/components/StatusBadge";
-import { StatusSelect, SyncButton, DeleteLeadButton, DeleteNoteButton } from "@/components/LeadControls";
+import { fmtIST, toISTInput } from "@/lib/time";
+import { StatusSelect, SyncButton, DeleteLeadButton, DeleteNoteButton, InstagramChatRefreshButton } from "@/components/LeadControls";
 
 export const dynamic = "force-dynamic";
 
-const fmt = (d: Date) => d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
-
-function toLocalInput(d: Date | null) {
-  if (!d) return "";
-  const off = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - off).toISOString().slice(0, 16);
-}
+// Sab time India (IST) me
+const fmt = (d: Date) => fmtIST(d);
+const toLocalInput = (d: Date | null) => toISTInput(d);
 
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,6 +22,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     include: {
       notes: { orderBy: { createdAt: "desc" } },
       activities: { orderBy: { createdAt: "desc" }, take: 50 },
+      messages: { orderBy: { sentAt: "asc" }, take: 200 },
     },
   });
   if (!lead) notFound();
@@ -59,7 +57,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               </a>
             )}
             {lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}
-            <span>Aayi: {fmt(lead.createdAt)}</span>
+            <span>Pehli baar aayi: {fmt(lead.createdAt)}</span>
+            {lead.lastWebhookAt && <span>Last aayi: {fmt(lead.lastWebhookAt)}</span>}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -69,7 +68,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               💬 ManyChat Live Chat
             </a>
           )}
-          <SyncButton id={lead.id} />
+          {!lead.subscriberId.startsWith("ig:") && <SyncButton id={lead.id} />}
+          {(lead.igConversationId || lead.igId) && <InstagramChatRefreshButton id={lead.id} />}
         </div>
       </div>
 
@@ -79,6 +79,28 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             <div className="card p-5">
               <h2 className="mb-2 text-sm font-medium text-slate-500">Last message / comment</h2>
               <p className="whitespace-pre-wrap">{lead.lastInputText}</p>
+            </div>
+          )}
+
+          {lead.messages.length > 0 && (
+            <div className="card p-5">
+              <h2 className="mb-3 font-medium">
+                Instagram chat <span className="text-xs font-normal text-slate-400">(IST · Instagram sirf last 20 messages deta hai)</span>
+              </h2>
+              <div className="max-h-[28rem] space-y-2 overflow-y-auto rounded-lg bg-slate-50 p-3">
+                {lead.messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                        m.fromMe ? "bg-indigo-600 text-white" : "border border-slate-200 bg-white text-slate-900"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap break-words">{m.text ?? <i className="opacity-70">[photo / video / share]</i>}</p>
+                      <div className={`mt-1 text-[10px] ${m.fromMe ? "text-indigo-200" : "text-slate-400"}`}>{fmt(m.sentAt)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -127,14 +149,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             <Field label="Email" name="email" type="email" defaultValue={lead.email} />
             <Field label="Source" name="source" defaultValue={lead.source} placeholder="Reel / keyword / ad" />
             <Field label="Deal value (₹)" name="dealValue" type="number" defaultValue={lead.dealValue?.toString()} />
-            <Field label="Follow-up date" name="followUpAt" type="datetime-local" defaultValue={toLocalInput(lead.followUpAt)} />
+            <Field label="Follow-up date (IST)" name="followUpAt" type="datetime-local" defaultValue={toLocalInput(lead.followUpAt)} />
             <button className="btn-primary w-full">Save</button>
           </form>
 
           <div className="card p-5 text-sm">
             <h2 className="mb-3 font-medium">ManyChat data</h2>
             <dl className="space-y-2">
-              <Row k="Subscriber ID" v={lead.subscriberId} />
+              <Row k="Subscriber ID" v={lead.subscriberId.startsWith("ig:") ? "— (sirf Instagram DM se)" : lead.subscriberId} />
               {lead.igId && <Row k="IG ID" v={lead.igId} />}
               {lead.subscribedAt && <Row k="Subscribed" v={fmt(lead.subscribedAt)} />}
               {lead.lastInteractionAt && <Row k="Last interaction" v={fmt(lead.lastInteractionAt)} />}

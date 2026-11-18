@@ -1,6 +1,11 @@
 import { headers } from "next/headers";
 import { AppShell } from "@/components/AppShell";
 import { isManyChatConfigured } from "@/lib/manychat";
+import { getIgAccount, hasIgToken } from "@/lib/instagram";
+import { lastInstagramSync } from "@/lib/instagramSync";
+import { saveInstagramToken } from "@/app/actions";
+import { InstagramImport } from "@/components/InstagramImport";
+import { fmtIST } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +19,12 @@ const BODY = `{
   "source": "Reel - Free Guide"
 }`;
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ig_ok?: string; ig_error?: string }>;
+}) {
+  const sp = await searchParams;
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
@@ -27,9 +37,85 @@ export default async function SetupPage() {
     { ok: !base.includes("localhost"), label: "Public URL (localhost nahi)", hint: "ManyChat localhost tak nahi pahuch sakta. Deploy karo ya ngrok / cloudflared tunnel use karo." },
   ];
 
+  // Instagram connection status
+  const igTokenSet = await hasIgToken();
+  let igAccount: string | null = null;
+  let igError: string | null = null;
+  if (igTokenSet) {
+    try {
+      const a = await getIgAccount();
+      igAccount = a.username ?? a.id;
+    } catch (e) {
+      igError = e instanceof Error ? e.message : String(e);
+    }
+  }
+  const igLastSync = await lastInstagramSync();
+
   return (
     <AppShell>
-      <h1 className="mb-6 text-2xl font-semibold">ManyChat Setup</h1>
+      <h1 className="mb-6 text-2xl font-semibold">Setup</h1>
+
+      <div className="card mb-6 space-y-5 p-5 text-sm leading-relaxed">
+        <div>
+          <h2 className="text-lg font-semibold">Instagram DMs se leads (purani + chhooti hui)</h2>
+          <p className="text-slate-600">
+            Ye seedha Instagram ke DMs padhta hai — jo leads ManyChat webhook se miss ho gayi, wo bhi yahan se aa jayengi. Har chat ka
+            banda lead banega (pehle se CRM me hai to usi me jud jayega) aur uske last messages lead page par dikhenge.
+          </p>
+        </div>
+
+        <ul className="space-y-1">
+          <li>
+            {igAccount ? "✅" : "⚠️"}{" "}
+            {igAccount ? (
+              <>Instagram connected: <b>@{igAccount}</b></>
+            ) : igTokenSet ? (
+              <>Token kaam nahi kar raha: <span className="text-red-600">{igError}</span> — naya token daalo</>
+            ) : (
+              "Instagram token abhi set nahi hai (neeche steps dekho)"
+            )}
+          </li>
+          <li>🕒 Last sync: {igLastSync ? fmtIST(igLastSync) : "kabhi nahi"}</li>
+          <li>
+            {process.env.CRON_SECRET ? "✅" : "⚠️"} Auto-sync (roz raat 12 baje IST){" "}
+            {!process.env.CRON_SECRET && <span className="text-slate-500">— Vercel env me CRON_SECRET daalo</span>}
+          </li>
+        </ul>
+
+        {sp.ig_ok && <div className="rounded-lg bg-green-50 p-3 text-green-800">✓ Token save ho gaya — @{sp.ig_ok} connected</div>}
+        {sp.ig_error && <div className="rounded-lg bg-red-50 p-3 text-red-700">Token save nahi hua: {sp.ig_error}</div>}
+
+        <InstagramImport disabled={!igAccount} />
+
+        <details className="rounded-lg border border-slate-200 p-4" open={!igAccount}>
+          <summary className="cursor-pointer font-medium">Instagram token kaise banaye (ek baar ka kaam)</summary>
+          <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-700">
+            <li>
+              Instagram app me account <b>Professional (Business/Creator)</b> hona chahiye. Phir Instagram → <b>Settings → Messages and calls →
+              Connected tools → &quot;Allow access to messages&quot;</b> ON karo.
+            </li>
+            <li>
+              <a className="text-indigo-600 underline" href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer">
+                developers.facebook.com/apps
+              </a>{" "}
+              → <b>Create app</b> → use case <b>&quot;Manage messaging &amp; content on Instagram&quot;</b> → app type <b>Business</b>.
+            </li>
+            <li>
+              App ke andar <b>Instagram → API setup with Instagram login</b> → <b>Generate access tokens</b> → <b>Add account</b> → apne
+              Instagram (herbalmaza.com_) se login karo → <b>Generate token</b> → token copy karo.
+            </li>
+            <li>Token neeche paste karke Save karo. App ko &quot;Development&quot; mode me hi rehne do — apne account ke liye review nahi chahiye.</li>
+            <li>Token 60 din chalta hai, CRM use apne aap refresh karta rehta hai. Kabhi &quot;token kaam nahi kar raha&quot; dikhe to naya bana ke yahan daal do.</li>
+          </ol>
+        </details>
+
+        <form action={saveInstagramToken} className="flex flex-wrap gap-2">
+          <input name="token" type="password" className="input max-w-xl flex-1" placeholder="Instagram access token (IGAA…)" autoComplete="off" />
+          <button className="btn-primary">Save token</button>
+        </form>
+      </div>
+
+      <h2 className="mb-4 text-lg font-semibold">ManyChat</h2>
 
       <div className="card mb-6 p-5">
         <h2 className="mb-3 font-medium">Status</h2>
@@ -53,8 +139,14 @@ export default async function SetupPage() {
         </Step>
 
         <Step n={2} title="Flow me External Request action add karo">
-          Jis automation se lead aati hai (comment → DM, story reply, keyword), uske end me (jab user ne phone/email de diya ho) →{" "}
-          <b>+ Action → Dev Tools → External Request</b>.
+          Jis automation se lead aati hai (comment → DM, story reply, keyword), usme <b>trigger ke turant baad, sabse pehle</b> →{" "}
+          <b>+ Action → Dev Tools → External Request</b>. Agar ye sirf flow ke end me ho (phone/email milne ke baad), to jo log beech me
+          chhod dete hain wo CRM me kabhi nahi aate.
+          <div className="mt-2 rounded-lg bg-amber-50 p-3 text-amber-900">
+            ⚠️ Har automation (har reel / keyword / story / DM flow) me ye External Request alag se lagana padta hai. Jis flow me nahi
+            laga, uski leads CRM me nahi aayengi. Phone/email baad me mile to flow ke end me ek aur External Request laga do — same
+            lead update ho jayegi.
+          </div>
         </Step>
 
         <Step n={3} title="Request configure karo">

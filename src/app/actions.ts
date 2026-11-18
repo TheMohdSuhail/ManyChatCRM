@@ -6,6 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { upsertLeadFromManyChat } from "@/lib/leads";
 import { isManyChatConfigured, addTagByName } from "@/lib/manychat";
 import { isValidStatus, statusMeta } from "@/lib/statuses";
+import { fromISTInput } from "@/lib/time";
+import { syncLeadInstagramChat } from "@/lib/instagramSync";
+import { getIgAccount, IG_TOKEN_KEY } from "@/lib/instagram";
+import { setSetting } from "@/lib/settings";
 
 function refresh(id: string) {
   revalidatePath(`/leads/${id}`);
@@ -29,7 +33,7 @@ export async function updateLeadStatus(id: string, status: string) {
   ]);
 
   // Optional: ManyChat me bhi tag laga do (jaise "crm_converted") taaki wahan se flow chala sako
-  if (process.env.MANYCHAT_SYNC_STATUS_TAGS === "true" && isManyChatConfigured()) {
+  if (process.env.MANYCHAT_SYNC_STATUS_TAGS === "true" && isManyChatConfigured() && !lead.subscriberId.startsWith("ig:")) {
     await addTagByName(lead.subscriberId, `crm_${status.toLowerCase()}`).catch((e) =>
       console.error("[manychat tag]", e)
     );
@@ -52,7 +56,8 @@ export async function updateLeadDetails(id: string, formData: FormData) {
       phone: get("phone"),
       source: get("source"),
       dealValue: dealValue ? Number(dealValue) || null : null,
-      followUpAt: followUpAt ? new Date(followUpAt) : null,
+      // form ka time IST maana jayega (server UTC me hai)
+      followUpAt: followUpAt ? fromISTInput(followUpAt) : null,
     },
   });
   await prisma.activity.create({ data: { leadId: id, type: "UPDATE", message: "Lead details update hui" } });
@@ -74,6 +79,9 @@ export async function deleteNote(noteId: string, leadId: string) {
 export async function syncLeadFromManyChat(id: string) {
   if (!isManyChatConfigured()) return { ok: false, error: "MANYCHAT_API_TOKEN .env me set karo" };
   const lead = await prisma.lead.findUniqueOrThrow({ where: { id } });
+  if (lead.subscriberId.startsWith("ig:")) {
+    return { ok: false, error: "Ye lead Instagram DM se aayi hai, ManyChat me abhi nahi hai — 'Instagram chat refresh' use karo" };
+  }
   const { apiError } = await upsertLeadFromManyChat({
     subscriberId: lead.subscriberId,
     payload: { id: lead.subscriberId },
@@ -88,4 +96,32 @@ export async function deleteLead(id: string) {
   revalidatePath("/leads");
   revalidatePath("/");
   redirect("/leads");
+}
+
+export async function refreshLeadInstagramChat(id: string) {
+  try {
+    const stats = await syncLeadInstagramChat(id);
+    refresh(id);
+    return { ok: true, message: `${stats.newMessages} naye messages` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Setup page se Instagram access token save karna (pehle check karta hai ki token chal raha hai) */
+export async function saveInstagramToken(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  if (!token) redirect("/setup?ig_error=" + encodeURIComponent("Token khali hai"));
+  let username = "";
+  try {
+    const acc = await getIgAccount(token);
+    username = acc.username ?? acc.id;
+  } catch (e) {
+    redirect("/setup?ig_error=" + encodeURIComponent(e instanceof Error ? e.message : String(e)));
+  }
+  await setSetting(IG_TOKEN_KEY, token);
+  // naya token 24 ghante baad refresh ho sakta hai — kal se auto-refresh shuru
+  await setSetting("ig_token_refreshed_at", String(Date.now() - 6 * 86400000));
+  revalidatePath("/setup");
+  redirect("/setup?ig_ok=" + encodeURIComponent(username));
 }

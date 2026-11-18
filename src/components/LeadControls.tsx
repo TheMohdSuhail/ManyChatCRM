@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { STATUSES } from "@/lib/statuses";
-import { updateLeadStatus, syncLeadFromManyChat, deleteLead, deleteNote } from "@/app/actions";
+import { updateLeadStatus, syncLeadFromManyChat, deleteLead, deleteNote, refreshLeadInstagramChat } from "@/app/actions";
 
 export function StatusSelect({ id, status }: { id: string; status: string }) {
   const [pending, start] = useTransition();
@@ -72,5 +72,27 @@ export function DeleteNoteButton({ noteId, leadId }: { noteId: string; leadId: s
     >
       delete
     </button>
+  );
+}
+
+export function InstagramChatRefreshButton({ id }: { id: string }) {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        className="btn-secondary"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const r = await refreshLeadInstagramChat(id);
+            setMsg(r.ok ? `✓ ${r.message}` : r.error ?? "Fail");
+          })
+        }
+      >
+        {pending ? "Refreshing…" : "↻ Instagram chat refresh"}
+      </button>
+      {msg && <span className="text-xs text-slate-500">{msg}</span>}
+    </div>
   );
 }

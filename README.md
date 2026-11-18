@@ -35,6 +35,8 @@ npm run dev               # http://localhost:3000
 | `AUTH_SECRET` | Lamba random string (session sign karne ke liye) |
 | `MANYCHAT_SYNC_STATUS_TAGS` | `true` = status change par ManyChat tag |
 | `APP_URL` | Deploy hone ke baad apna domain (Setup page par webhook URL ke liye) |
+| `CRON_SECRET` | Lamba random string — Instagram auto-sync cron ke liye |
+| `IG_ACCESS_TOKEN` | Optional — Instagram token (Setup page se save karna better) |
 
 ## ManyChat me connect karna
 CRM me login karke **ManyChat Setup** page kholo — wahan exact URL, header aur JSON body copy karne ke liye hai.
@@ -69,5 +71,14 @@ Database Neon Postgres hai, isliye local aur Vercel dono same DB use karte hain.
 2. Redeploy
 3. Schema badle to: `npx prisma db push`
 
+## Instagram DMs se leads (purani / miss hui)
+ManyChat API me "saare contacts" ya "chat history" ka endpoint nahi hai, isliye CRM seedha **Instagram Conversations API** se DMs padhta hai.
+- Setup page par token save karo (steps wahin likhe hain) → **"Saari purani chats import karo"** ek baar dabao.
+- Har chat ka banda lead banta hai; pehle se ManyChat wali lead ho to username se usi me jud jata hai. Baad me ManyChat webhook aaye to bhi duplicate nahi banti.
+- Lead page par Instagram chat (last 20 messages — Instagram ki limit) IST time ke saath dikhti hai.
+- Auto-sync: `vercel.json` me roz raat 12 baje IST cron hai (`CRON_SECRET` env zaroori). Zyada baar chahiye to cron-job.org se
+  `https://<domain>/api/cron/instagram-sync?secret=<CRON_SECRET>` har 15–30 min hit karwao.
+- Limits: Requests folder ki 30 din se inactive chats Instagram nahi deta.
+
 ## Note
-ManyChat API me "saare subscribers list karo" wala endpoint nahi hai, isliye purani leads automatically import nahi hongi — nayi leads webhook se aayengi. Kisi bhi lead ko detail page par **Sync from ManyChat** se refresh kar sakte ho.
+Kisi bhi ManyChat lead ko detail page par **Sync from ManyChat** se refresh kar sakte ho.

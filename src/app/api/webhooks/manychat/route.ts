@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { upsertLeadFromManyChat } from "@/lib/leads";
+import { enrichLeadFromManyChat, upsertLeadFromManyChat } from "@/lib/leads";
+import { isManyChatConfigured } from "@/lib/manychat";
 import { statusMeta } from "@/lib/statuses";
 
 export const dynamic = "force-dynamic";
+// Background enrichment (after) ke liye function ko thoda zyada time
+export const maxDuration = 30;
 
 function secretOk(req: NextRequest) {
   const expected = process.env.WEBHOOK_SECRET;
@@ -29,6 +32,7 @@ function secretOk(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   if (!secretOk(req)) {
+    console.warn("[manychat webhook] 401 — x-webhook-secret galat/missing. Is flow ka header check karo.");
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
@@ -36,22 +40,34 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
+    console.warn("[manychat webhook] 400 — body valid JSON nahi hai");
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
   }
 
   const rawId = body.subscriber_id ?? body.user_id ?? body.contact_id ?? body.id;
   const subscriberId = rawId === undefined || rawId === null ? "" : String(rawId).trim();
   if (!subscriberId || /^\{\{.*\}\}$/.test(subscriberId)) {
+    console.warn("[manychat webhook] 400 — subscriber_id missing. Body:", JSON.stringify(body).slice(0, 2000));
     return NextResponse.json({ ok: false, error: "subscriber_id missing" }, { status: 400 });
   }
 
   try {
+    // ManyChat External Request ~10 second me timeout ho jata hai aur retry NAHI karta.
+    // Isliye pehle sirf webhook data se lead turant save karo (ManyChat API ka wait nahi)...
     const { lead, created } = await upsertLeadFromManyChat({
       subscriberId,
       payload: { ...body, id: subscriberId },
       source: typeof body.source === "string" ? body.source : null,
       message: typeof body.message === "string" ? body.message : null,
+      fetchFromApi: false,
     });
+
+    // ...aur response bhejne ke BAAD background me API se poori profile bharo
+    if (isManyChatConfigured()) {
+      after(() =>
+        enrichLeadFromManyChat(subscriberId).catch((e) => console.error("[manychat enrich]", subscriberId, e))
+      );
+    }
 
     // Ye response ManyChat me "Response mapping" se custom field me save kar sakte ho
     return NextResponse.json({
@@ -62,7 +78,8 @@ export async function POST(req: NextRequest) {
       status_label: statusMeta(lead.status).label,
     });
   } catch (e) {
-    console.error("[manychat webhook]", e);
+    // Body log me rakho taaki Vercel logs se lead recover ho sake
+    console.error("[manychat webhook] SAVE FAIL", JSON.stringify(body).slice(0, 2000), e);
     return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
   }
 }

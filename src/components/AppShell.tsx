@@ -3,7 +3,7 @@ import Link from "next/link";
 const NAV = [
   { href: "/", label: "Dashboard" },
   { href: "/leads", label: "Leads" },
-  { href: "/setup", label: "ManyChat Setup" },
+  { href: "/setup", label: "Setup (ManyChat + Instagram)" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

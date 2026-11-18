@@ -8,6 +8,7 @@
     "start": "next start",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
+    "db:backfill": "prisma db execute --file prisma/backfill.sql --schema prisma/schema.prisma",
     "postinstall": "prisma generate"
   },
   "dependencies": {

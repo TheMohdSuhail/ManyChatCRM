@@ -36,13 +36,17 @@ model Lead {
   rawPayload        String? // last webhook body (debugging ke liye)
   subscribedAt      DateTime?
   lastInteractionAt DateTime?
+  lastWebhookAt     DateTime? // last kab aayi — ManyChat webhook ya Instagram DM (returning lead bhi upar dikhe)
+  igConversationId  String? // Instagram DM conversation id (Instagram import se)
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   notes             Note[]
   activities        Activity[]
+  messages          Message[]
 
   @@index([status])
   @@index([createdAt])
+  @@index([lastWebhookAt])
 }
 
 model Note {
@@ -60,4 +64,25 @@ model Activity {
   type      String // CREATED | WEBHOOK | STATUS | SYNC | UPDATE
   message   String
   createdAt DateTime @default(now())
+}
+
+// Instagram DM messages (Instagram Conversations API se import)
+model Message {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  igMessageId String   @unique
+  fromMe      Boolean // true = humne (Herbal Maza account ne) bheja
+  text        String?
+  sentAt      DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([leadId, sentAt])
+}
+
+// Chhoti settings (Instagram token, last sync time...)
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }

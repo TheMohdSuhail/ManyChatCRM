@@ -6,6 +6,7 @@ import { parseJson } from "@/lib/leads";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Avatar";
+import { fmtIST } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 50;
@@ -24,13 +25,14 @@ export default async function LeadsPage({
     ...(status ? { status } : {}),
     ...(q
       ? {
+          // mode: "insensitive" — Postgres me search warna capital/small letter par miss ho jata tha
           OR: [
-            { name: { contains: q } },
-            { igUsername: { contains: q.replace(/^@/, "") } },
-            { email: { contains: q } },
+            { name: { contains: q, mode: "insensitive" } },
+            { igUsername: { contains: q.replace(/^@/, ""), mode: "insensitive" } },
+            { email: { contains: q, mode: "insensitive" } },
             { phone: { contains: q } },
-            { source: { contains: q } },
-            { lastInputText: { contains: q } },
+            { source: { contains: q, mode: "insensitive" } },
+            { lastInputText: { contains: q, mode: "insensitive" } },
             { subscriberId: q },
           ],
         }
@@ -38,7 +40,11 @@ export default async function LeadsPage({
   };
 
   const [leads, count] = await Promise.all([
-    prisma.lead.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
+    // Jo lead sabse last aayi (nayi ya wapas aane wali) wo sabse upar
+    prisma.lead.findMany({
+      where,
+      orderBy: [{ lastWebhookAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
     prisma.lead.count({ where }),
   ]);
   const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
@@ -102,7 +108,7 @@ export default async function LeadsPage({
               <th className="px-4 py-3">Last message</th>
               <th className="px-4 py-3">Source / Tags</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Aayi</th>
+              <th className="px-4 py-3">Aayi (IST)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -148,7 +154,10 @@ export default async function LeadsPage({
                     <StatusBadge status={l.status} />
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">
-                    {l.createdAt.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                    <div>{fmtIST(l.lastWebhookAt ?? l.createdAt)}</div>
+                    {l.lastWebhookAt && l.lastWebhookAt.getTime() - l.createdAt.getTime() > 60000 && (
+                      <div className="text-slate-400">Pehli baar: {fmtIST(l.createdAt)}</div>
+                    )}
                   </td>
                 </tr>
               );

@@ -3,37 +3,58 @@ import { prisma } from "@/lib/prisma";
 import { STATUSES } from "@/lib/statuses";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
+import { fmtIST, istDayKey, startOfISTDay } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  // India time ke hisaab se "aaj" (raat 12 baje IST se)
+  const startOfToday = startOfISTDay();
   const sevenDaysAgo = new Date(startOfToday.getTime() - 6 * 86400000);
 
-  const [total, today, byStatus, recent, dueFollowUps, last7] = await Promise.all([
+  const [total, newToday, byStatus, recent, dueFollowUps, arrivals, dms] = await Promise.all([
     prisma.lead.count(),
     prisma.lead.count({ where: { createdAt: { gte: startOfToday } } }),
     prisma.lead.groupBy({ by: ["status"], _count: true }),
-    prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 8 }),
+    prisma.lead.findMany({
+      orderBy: [{ lastWebhookAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      take: 8,
+    }),
     prisma.lead.findMany({
       where: { followUpAt: { lte: new Date(Date.now() + 86400000) }, status: { notIn: ["CONVERTED", "LOST"] } },
       orderBy: { followUpAt: "asc" },
       take: 8,
     }),
-    prisma.lead.findMany({ where: { createdAt: { gte: sevenDaysAgo } }, select: { createdAt: true } }),
+    // Har baar jab ManyChat se lead aayi (nayi + wapas aane wali) — Activity log se
+    prisma.activity.findMany({
+      where: { type: { in: ["CREATED", "WEBHOOK"] }, createdAt: { gte: sevenDaysAgo } },
+      select: { leadId: true, createdAt: true },
+    }),
+    // Instagram DM import se aaye messages (user ne bheje) — asli message time se
+    prisma.message.findMany({
+      where: { fromMe: false, sentAt: { gte: sevenDaysAgo } },
+      select: { leadId: true, sentAt: true },
+    }),
   ]);
 
   const counts = Object.fromEntries(byStatus.map((s) => [s.status, s._count]));
   const converted = counts.CONVERTED ?? 0;
   const conversion = total ? Math.round((converted / total) * 100) : 0;
 
+  // Din ke hisaab se unique leads (ek user din me 3 baar aaye to 1 gina jayega)
+  const perDay = new Map<string, Set<string>>();
+  for (const a of [...arrivals.map((x) => ({ leadId: x.leadId, at: x.createdAt })), ...dms.map((x) => ({ leadId: x.leadId, at: x.sentAt }))]) {
+    const key = istDayKey(a.at);
+    if (!perDay.has(key)) perDay.set(key, new Set());
+    perDay.get(key)!.add(a.leadId);
+  }
+  const activeToday = perDay.get(istDayKey(startOfToday))?.size ?? 0;
+
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(sevenDaysAgo.getTime() + i * 86400000);
-    const key = d.toDateString();
     return {
-      label: d.toLocaleDateString("en-IN", { weekday: "short" }),
-      count: last7.filter((l) => l.createdAt.toDateString() === key).length,
+      label: fmtIST(d, { weekday: "short" }),
+      count: perDay.get(istDayKey(d))?.size ?? 0,
     };
   });
   const maxDay = Math.max(1, ...days.map((d) => d.count));
@@ -44,7 +65,11 @@ export default async function Dashboard() {
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Total Leads" value={total} />
-        <Stat label="Aaj ki Leads" value={today} />
+        <Stat
+          label="Aaj ki Leads (IST)"
+          value={activeToday}
+          sub={`${newToday} nayi · ${Math.max(0, activeToday - newToday)} wapas aayi`}
+        />
         <Stat label="New (untouched)" value={counts.NEW ?? 0} />
         <Stat label="Conversion" value={`${conversion}%`} sub={`${converted} converted`} />
       </div>
@@ -101,6 +126,7 @@ type MiniLead = {
   igUsername: string | null;
   status: string;
   createdAt: Date;
+  lastWebhookAt: Date | null;
   followUpAt: Date | null;
 };
 
@@ -121,7 +147,7 @@ function LeadList({ title, leads, empty, showFollowUp }: { title: string; leads:
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <span className="text-xs text-slate-400">
-                    {(showFollowUp ? l.followUpAt : l.createdAt)?.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                    {fmtIST(showFollowUp ? l.followUpAt : (l.lastWebhookAt ?? l.createdAt))}
                   </span>
                   <StatusBadge status={l.status} />
                 </div>

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { getSubscriberInfo, isManyChatConfigured, subscriberToLeadFields, type ManyChatSubscriber } from "./manychat";
 
@@ -20,8 +21,12 @@ export async function upsertLeadFromManyChat(opts: {
   source?: string | null;
   message?: string | null;
   fetchFromApi?: boolean;
-  /** "sync" = CRM se manual refresh (raw payload overwrite nahi hota, SYNC activity) */
-  mode?: "webhook" | "sync";
+  /**
+   * "webhook" = ManyChat se aayi request
+   * "sync"    = CRM se manual refresh (raw payload overwrite nahi hota, SYNC activity)
+   * "enrich"  = webhook ke baad background me API se profile bharna (activity sirf error par)
+   */
+  mode?: "webhook" | "sync" | "enrich";
 }) {
   const { subscriberId, payload = {}, source, message, fetchFromApi = true, mode = "webhook" } = opts;
 
@@ -41,7 +46,21 @@ export async function upsertLeadFromManyChat(opts: {
   const fields = { ...fromPayload.fields, ...(fromApi?.fields ?? {}) };
   if (message?.trim()) fields.lastInputText = message.trim();
 
-  const existing = await prisma.lead.findUnique({ where: { subscriberId } });
+  const bySubscriber = await prisma.lead.findUnique({ where: { subscriberId } });
+  // Instagram DM import se bani lead (subscriberId "ig:...") ho to usi ko ManyChat id de do — duplicate nahi
+  const igOnly =
+    !bySubscriber && (fields.igUsername || fields.igId)
+      ? await prisma.lead.findFirst({
+          where: {
+            subscriberId: { startsWith: "ig:" },
+            OR: [
+              ...(fields.igUsername ? [{ igUsername: { equals: fields.igUsername, mode: Prisma.QueryMode.insensitive } }] : []),
+              ...(fields.igId ? [{ igId: fields.igId }] : []),
+            ],
+          },
+        })
+      : null;
+  const existing = bySubscriber ?? igOnly;
 
   const tags = fromApi?.tags ?? fromPayload.tags;
   const customFields = {
@@ -54,15 +73,29 @@ export async function upsertLeadFromManyChat(opts: {
     ...fields,
     ...(tags ? { tags: JSON.stringify(tags) } : {}),
     customFields: JSON.stringify(customFields),
-    ...(mode === "webhook" ? { rawPayload: JSON.stringify(payload).slice(0, 20000) } : {}),
+    ...(mode === "webhook" ? { rawPayload: JSON.stringify(payload).slice(0, 20000), lastWebhookAt: new Date() } : {}),
     ...(source?.trim() ? { source: source.trim() } : {}),
   };
 
-  const lead = existing
-    ? await prisma.lead.update({ where: { id: existing.id }, data })
-    : await prisma.lead.create({ data: { subscriberId, ...data } });
+  // upsert: agar same user ki 2 requests ek saath aayein (comment + DM), dono safe save hongi
+  let lead;
+  if (igOnly) {
+    lead = await prisma.lead.update({ where: { id: igOnly.id }, data: { subscriberId, ...data } });
+  } else try {
+    lead = await prisma.lead.upsert({ where: { subscriberId }, create: { subscriberId, ...data }, update: data });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      lead = await prisma.lead.update({ where: { subscriberId }, data });
+    } else {
+      throw e;
+    }
+  }
 
-  if (mode === "sync") {
+  if (mode === "enrich") {
+    if (apiError) {
+      await prisma.activity.create({ data: { leadId: lead.id, type: "SYNC", message: `ManyChat API fetch fail: ${apiError}` } });
+    }
+  } else if (mode === "sync") {
     await prisma.activity.create({
       data: {
         leadId: lead.id,
@@ -81,4 +114,9 @@ export async function upsertLeadFromManyChat(opts: {
   }
 
   return { lead, created: !existing, apiError };
+}
+
+/** Webhook ka response bhejne ke baad ManyChat API se poori profile (photo, tags, custom fields) bharta hai */
+export function enrichLeadFromManyChat(subscriberId: string) {
+  return upsertLeadFromManyChat({ subscriberId, payload: { id: subscriberId }, mode: "enrich" });
 }
