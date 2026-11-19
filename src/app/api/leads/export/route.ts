@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { statusMeta } from "@/lib/statuses";
 import { parseJson } from "@/lib/leads";
 import { istDayKey, istStamp } from "@/lib/time";
+import { parseLeadFilters } from "@/lib/leadFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +13,11 @@ function csvCell(v: unknown) {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Leads page wale hi filters (search, status, date range) — page/size nahi, saari matching leads
+  const { where } = parseLeadFilters(Object.fromEntries(new URL(req.url).searchParams));
   const leads = await prisma.lead.findMany({
+    where,
     orderBy: [{ lastWebhookAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
   });
   const header = [
