@@ -13,7 +13,7 @@ Instagram user → ManyChat Flow → External Request (POST) → /api/webhooks/m
 - Pipeline status: New → Contacted → Interested → Follow-up → Converted / Lost
 - Notes, activity timeline, deal value, follow-up date
 - Dashboard: aaj ki leads, 7 din ka chart, pipeline, due follow-ups
-- Search + filter, CSV export, password login
+- Search + filter, Excel export, password login
 - Optional: status badalne par ManyChat me `crm_<status>` tag lagana
 
 ## Local setup

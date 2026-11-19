@@ -43,7 +43,7 @@ function presetRange(range: string, now = new Date()): { from: Date; to: Date } 
 }
 
 /**
- * URL search params se leads ka filter banata hai — Leads page aur CSV export dono yahi use karte hain.
+ * URL search params se leads ka filter banata hai — Leads page aur Excel export dono yahi use karte hain.
  * Date filter "Aayi" time par lagta hai: lastWebhookAt (last aayi), warna createdAt.
  */
 export function parseLeadFilters(sp: RawParams) {

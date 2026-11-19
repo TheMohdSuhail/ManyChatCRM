@@ -59,7 +59,7 @@ export default async function LeadsPage({
           Leads <span className="text-base font-normal text-slate-500">({count})</span>
         </h1>
         <a href={`/api/leads/export${exportQs.size ? `?${exportQs}` : ""}`} className="btn-secondary">
-          ⬇ Export CSV{f.hasFilters ? " (filtered)" : ""}
+          ⬇ Export Excel{f.hasFilters ? " (filtered)" : ""}
         </a>
       </div>
 
