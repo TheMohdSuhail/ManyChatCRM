@@ -13,7 +13,9 @@ Instagram user → ManyChat Flow → External Request (POST) → /api/webhooks/m
 - Pipeline status: New → Contacted → Interested → Follow-up → Converted / Lost
 - Notes, activity timeline, deal value, follow-up date
 - Dashboard: aaj ki leads, 7 din ka chart, pipeline, due follow-ups
-- Search + filter, Excel export, password login
+- Search + filter, Excel export
+- Team login: har user ka apna email + password, Admin / Member roles, password change, "logout everywhere"
+- Mobile, tablet aur desktop sab ke liye responsive UI
 - Optional: status badalne par ManyChat me `crm_<status>` tag lagana
 
 ## Local setup
@@ -24,6 +26,16 @@ npx prisma db push        # database banao
 npm run dev               # http://localhost:3000
 ```
 
+### Admin account
+Login page par sirf login hai — koi signup / setup form nahi. CRM me **sirf ek Admin** hota hai, jo terminal se banta hai:
+```bash
+ADMIN_EMAIL="you@example.com" ADMIN_PASSWORD="strong-password" ADMIN_NAME="Your Name" npm run admin:set
+```
+Password bhool gaye? Yahi command naye password ke saath dobara chalao (purane logins band ho jayenge).
+Admin login karke **Team** page se Members add kar sakta hai.
+
+Roles: **Admin** = members manage, lead delete, Instagram token save. **Member** = leads dekhna/edit, notes, status, sync, export.
+
 ## .env
 | Variable | Kya hai |
 |---|---|
@@ -31,8 +43,7 @@ npm run dev               # http://localhost:3000
 | `DATABASE_URL_UNPOOLED` | Neon direct Postgres URL (`prisma db push` ke liye) |
 | `MANYCHAT_API_TOKEN` | ManyChat → Settings → API → Generate your API Key |
 | `WEBHOOK_SECRET` | Lamba random string; ManyChat request header `x-webhook-secret` me same daalna |
-| `CRM_PASSWORD` | CRM login password |
-| `AUTH_SECRET` | Lamba random string (session sign karne ke liye) |
+| `AUTH_SECRET` | Lamba random string (session sign karne ke liye; badalne par sab logout) |
 | `MANYCHAT_SYNC_STATUS_TAGS` | `true` = status change par ManyChat tag |
 | `APP_URL` | Deploy hone ke baad apna domain (Setup page par webhook URL ke liye) |
 | `CRON_SECRET` | Lamba random string — Instagram auto-sync cron ke liye |
@@ -67,7 +78,7 @@ Jo `https://….trycloudflare.com` URL mile, wahi ManyChat me daalo.
 
 ## Deploy (Vercel)
 Database Neon Postgres hai, isliye local aur Vercel dono same DB use karte hain.
-1. Vercel → Project → Settings → Environment Variables me `.env` ke saare variables daalo (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `MANYCHAT_API_TOKEN`, `WEBHOOK_SECRET`, `CRM_PASSWORD`, `AUTH_SECRET`, `APP_URL`)
+1. Vercel → Project → Settings → Environment Variables me `.env` ke saare variables daalo (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `MANYCHAT_API_TOKEN`, `WEBHOOK_SECRET`, `AUTH_SECRET`, `APP_URL`)
 2. Redeploy
 3. Schema badle to: `npx prisma db push`
 

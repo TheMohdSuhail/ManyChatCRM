@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { runInstagramSync } from "@/lib/instagramSync";
+import { getCurrentUser } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,6 +12,7 @@ export const maxDuration = 60;
  * Response me done=false ho to same cursor ke saath dobara call karo.
  */
 export async function POST(req: NextRequest) {
+  if (!(await getCurrentUser())) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { mode?: string; cursor?: string | null; startedAt?: number | null };
   try {
     const result = await runInstagramSync({

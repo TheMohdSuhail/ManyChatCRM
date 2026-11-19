@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { STATUSES } from "@/lib/statuses";
-import { AppShell } from "@/components/AppShell";
+import { AppShell, PageHeader } from "@/components/AppShell";
+import { Avatar } from "@/components/Avatar";
+import { getCurrentUser } from "@/lib/users";
+import { ArrowRight, CalendarDays, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { fmtIST, istDayKey, startOfISTDay } from "@/lib/time";
 
@@ -59,98 +62,175 @@ export default async function Dashboard() {
   });
   const maxDay = Math.max(1, ...days.map((d) => d.count));
 
+  const user = await getCurrentUser();
+  const hour = Number(fmtIST(new Date(), { hour: "numeric", hourCycle: "h23" }));
+  const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const weekTotal = days.reduce((a, d) => a + d.count, 0);
+
   return (
     <AppShell>
-      <h1 className="mb-6 text-2xl font-semibold">Dashboard</h1>
+      <PageHeader
+        title={`${greet}${user ? `, ${user.name.split(" ")[0]}` : ""} 👋`}
+        sub={`Aaj ${fmtIST(new Date(), { weekday: "long", day: "numeric", month: "long" })}`}
+        actions={
+          <Link href="/leads" className="btn-primary">
+            <Users className="h-4 w-4" /> All leads
+          </Link>
+        }
+      />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="Total Leads" value={total} />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <Stat icon={Users} tone="indigo" label="Total leads" value={total} />
         <Stat
-          label="Aaj ki Leads (IST)"
+          icon={CalendarDays}
+          tone="pink"
+          label="Aaj ki leads"
           value={activeToday}
-          sub={`${newToday} nayi · ${Math.max(0, activeToday - newToday)} wapas aayi`}
+          sub={`${newToday} nayi · ${Math.max(0, activeToday - newToday)} wapas`}
         />
-        <Stat label="New (untouched)" value={counts.NEW ?? 0} />
-        <Stat label="Conversion" value={`${conversion}%`} sub={`${converted} converted`} />
+        <Stat icon={Sparkles} tone="blue" label="New (untouched)" value={counts.NEW ?? 0} href="/leads?status=NEW" />
+        <Stat icon={TrendingUp} tone="green" label="Conversion" value={`${conversion}%`} sub={`${converted} converted`} />
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-3">
         <div className="card p-5 lg:col-span-2">
-          <h2 className="mb-4 font-medium">Pichle 7 din</h2>
-          <div className="flex h-40 items-end gap-3">
-            {days.map((d, i) => (
-              <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                <span className="text-xs text-slate-500">{d.count}</span>
-                <div className="w-full rounded-t-md bg-indigo-500" style={{ height: `${(d.count / maxDay) * 100}%`, minHeight: 2 }} />
-                <span className="text-xs text-slate-500">{d.label}</span>
-              </div>
-            ))}
+          <div className="mb-5 flex items-baseline justify-between gap-2">
+            <h2 className="font-medium">Pichle 7 din</h2>
+            <span className="text-sm text-slate-500">{weekTotal} lead-days</span>
+          </div>
+          <div className="flex h-44 items-end gap-2 sm:gap-4">
+            {days.map((d, i) => {
+              const today = i === days.length - 1;
+              return (
+                <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
+                  <span className={`text-xs font-medium ${today ? "text-indigo-600" : "text-slate-500"}`}>{d.count}</span>
+                  <div
+                    className={`w-full max-w-12 rounded-lg ${today ? "bg-gradient-to-t from-indigo-600 to-pink-500" : "bg-indigo-200"}`}
+                    style={{ height: `${(d.count / maxDay) * 100}%`, minHeight: 4 }}
+                  />
+                  <span className={`text-xs ${today ? "font-semibold text-slate-900" : "text-slate-500"}`}>{d.label}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
         <div className="card p-5">
           <h2 className="mb-4 font-medium">Pipeline</h2>
-          <ul className="space-y-2">
-            {STATUSES.map((s) => (
-              <li key={s.value}>
-                <Link href={`/leads?status=${s.value}`} className="flex items-center justify-between rounded-md px-2 py-1 hover:bg-slate-50">
-                  <StatusBadge status={s.value} />
-                  <span className="font-medium">{counts[s.value] ?? 0}</span>
-                </Link>
-              </li>
-            ))}
+          <ul className="space-y-1">
+            {STATUSES.map((s) => {
+              const n = counts[s.value] ?? 0;
+              return (
+                <li key={s.value}>
+                  <Link href={`/leads?status=${s.value}`} className="group block rounded-xl px-2 py-2 hover:bg-slate-50">
+                    <div className="flex items-center justify-between">
+                      <StatusBadge status={s.value} />
+                      <span className="text-sm font-semibold">{n}</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-indigo-500/70" style={{ width: `${total ? (n / total) * 100 : 0}%` }} />
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <LeadList title="Latest Leads" leads={recent} empty="Abhi koi lead nahi. ManyChat Setup page dekho." />
+        <LeadList title="Latest leads" href="/leads" leads={recent} empty="Abhi koi lead nahi. Setup page dekho." />
         <LeadList title="Follow-up due (24 ghante)" leads={dueFollowUps} empty="Koi follow-up pending nahi 🎉" showFollowUp />
       </div>
     </AppShell>
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
-  return (
-    <div className="card p-4">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-      {sub && <div className="text-xs text-slate-400">{sub}</div>}
+const TONES = {
+  indigo: "bg-indigo-50 text-indigo-600",
+  pink: "bg-pink-50 text-pink-600",
+  blue: "bg-blue-50 text-blue-600",
+  green: "bg-green-50 text-green-600",
+} as const;
+
+function Stat({
+  icon: Icon,
+  tone,
+  label,
+  value,
+  sub,
+  href,
+}: {
+  icon: LucideIcon;
+  tone: keyof typeof TONES;
+  label: string;
+  value: number | string;
+  sub?: string;
+  href?: string;
+}) {
+  const body = (
+    <div className={`card h-full p-4 sm:p-5 ${href ? "transition hover:border-indigo-200 hover:shadow-md" : ""}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-xs font-medium text-slate-500 sm:text-sm">{label}</div>
+        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg sm:h-9 sm:w-9 ${TONES[tone]}`}>
+          <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+        </span>
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{value}</div>
+      {sub && <div className="mt-0.5 text-xs text-slate-400">{sub}</div>}
     </div>
   );
+  return href ? <Link href={href}>{body}</Link> : body;
 }
 
 type MiniLead = {
   id: string;
   name: string | null;
   igUsername: string | null;
+  profilePic: string | null;
   status: string;
   createdAt: Date;
   lastWebhookAt: Date | null;
   followUpAt: Date | null;
 };
 
-function LeadList({ title, leads, empty, showFollowUp }: { title: string; leads: MiniLead[]; empty: string; showFollowUp?: boolean }) {
+function LeadList({
+  title,
+  href,
+  leads,
+  empty,
+  showFollowUp,
+}: {
+  title: string;
+  href?: string;
+  leads: MiniLead[];
+  empty: string;
+  showFollowUp?: boolean;
+}) {
   return (
     <div className="card p-5">
-      <h2 className="mb-3 font-medium">{title}</h2>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="font-medium">{title}</h2>
+        {href && (
+          <Link href={href} className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-700">
+            View all <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        )}
+      </div>
       {leads.length === 0 ? (
-        <p className="text-sm text-slate-500">{empty}</p>
+        <p className="py-6 text-center text-sm text-slate-500">{empty}</p>
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="-mx-2 divide-y divide-slate-100">
           {leads.map((l) => (
             <li key={l.id}>
-              <Link href={`/leads/${l.id}`} className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50">
-                <div className="min-w-0">
-                  <div className="truncate font-medium">{l.name ?? "Unknown"}</div>
-                  <div className="truncate text-xs text-slate-500">{l.igUsername ? `@${l.igUsername}` : "—"}</div>
+              <Link href={`/leads/${l.id}`} className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-slate-50">
+                <Avatar src={l.profilePic} name={l.name} size={36} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{l.name ?? "Unknown"}</div>
+                  <div className="truncate text-xs text-slate-500">
+                    {l.igUsername ? `@${l.igUsername}` : "—"} · {fmtIST(showFollowUp ? l.followUpAt : (l.lastWebhookAt ?? l.createdAt))}
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-slate-400">
-                    {fmtIST(showFollowUp ? l.followUpAt : (l.lastWebhookAt ?? l.createdAt))}
-                  </span>
-                  <StatusBadge status={l.status} />
-                </div>
+                <StatusBadge status={l.status} />
               </Link>
             </li>
           ))}

@@ -1,35 +1,30 @@
-import Link from "next/link";
+import { requireUser } from "@/lib/users";
+import { MobileTabBar, MobileTopBar, Sidebar } from "@/components/Nav";
 
-const NAV = [
-  { href: "/", label: "Dashboard" },
-  { href: "/leads", label: "Leads" },
-  { href: "/setup", label: "Setup (ManyChat + Instagram)" },
-];
-
-export function AppShell({ children }: { children: React.ReactNode }) {
+/** Har logged-in page isme wrap hota hai — yahin DB se user check hota hai (deleted user / purana session = login page) */
+export async function AppShell({ children }: { children: React.ReactNode }) {
+  const user = await requireUser();
+  const isAdmin = user.role === "ADMIN";
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
-          <Link href="/" className="flex items-center gap-2 font-semibold">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-pink-500 to-indigo-600 text-sm text-white">
-              L
-            </span>
-            Lead CRM
-          </Link>
-          <nav className="flex flex-1 gap-1 overflow-x-auto text-sm">
-            {NAV.map((n) => (
-              <Link key={n.href} href={n.href} className="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900">
-                {n.label}
-              </Link>
-            ))}
-          </nav>
-          <form action="/api/auth/logout" method="post">
-            <button className="text-sm text-slate-500 hover:text-slate-900">Logout</button>
-          </form>
-        </div>
-      </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+      <Sidebar isAdmin={isAdmin} name={user.name} email={user.email} />
+      <MobileTopBar name={user.name} />
+      <div className="lg:pl-64">
+        <main className="mx-auto max-w-7xl px-4 pt-5 pb-28 sm:px-6 lg:px-8 lg:pt-8 lg:pb-12">{children}</main>
+      </div>
+      <MobileTabBar isAdmin={isAdmin} />
+    </div>
+  );
+}
+
+export function PageHeader({ title, sub, actions }: { title: React.ReactNode; sub?: React.ReactNode; actions?: React.ReactNode }) {
+  return (
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-6">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-[28px]">{title}</h1>
+        {sub && <p className="mt-1 text-sm text-slate-500">{sub}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

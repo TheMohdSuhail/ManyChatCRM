@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { parseJson } from "@/lib/leads";
 import { addNote, updateLeadDetails } from "@/app/actions";
 import { AppShell } from "@/components/AppShell";
+import { requireUser } from "@/lib/users";
+import { ArrowLeft, Mail, MessageCircle, Phone } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { fmtIST, toISTInput } from "@/lib/time";
@@ -26,6 +28,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     },
   });
   if (!lead) notFound();
+  const user = await requireUser();
 
   const tags = parseJson<string[]>(lead.tags, []);
   const customFields = parseJson<Record<string, unknown>>(lead.customFields, {});
@@ -34,42 +37,61 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
 
   return (
     <AppShell>
-      <Link href="/leads" className="mb-4 inline-block text-sm text-slate-500 hover:text-slate-900">
-        ← All leads
+      <Link href="/leads" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
+        <ArrowLeft className="h-4 w-4" /> All leads
       </Link>
 
-      <div className="card mb-6 flex flex-wrap items-center gap-4 p-5">
-        <Avatar src={lead.profilePic} name={lead.name} size={64} />
-        <div className="min-w-0 flex-1">
-          <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold">
-            {lead.name ?? "Unknown"} <StatusBadge status={lead.status} />
-          </h1>
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
-            {lead.igUsername && (
-              <a href={`https://instagram.com/${lead.igUsername}`} target="_blank" rel="noreferrer" className="text-pink-600 hover:underline">
-                @{lead.igUsername}
+      <div className="card mb-6 p-4 sm:p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-4">
+            <Avatar src={lead.profilePic} name={lead.name} size={64} />
+            <div className="min-w-0 flex-1">
+              <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight sm:text-2xl">
+                <span className="break-words">{lead.name ?? "Unknown"}</span> <StatusBadge status={lead.status} />
+              </h1>
+              {lead.igUsername && (
+                <a href={`https://instagram.com/${lead.igUsername}`} target="_blank" rel="noreferrer" className="text-sm text-pink-600 hover:underline">
+                  @{lead.igUsername}
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <StatusSelect key={lead.status} id={lead.id} status={lead.status} />
+            {lead.liveChatUrl && (
+              <a href={lead.liveChatUrl} target="_blank" rel="noreferrer" className="btn-secondary">
+                <MessageCircle className="h-4 w-4" /> ManyChat Live Chat
               </a>
             )}
-            {lead.phone && <a href={`tel:${lead.phone}`}>{lead.phone}</a>}
-            {lead.phone && (
-              <a href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="text-green-600 hover:underline">
-                WhatsApp
-              </a>
-            )}
-            {lead.email && <a href={`mailto:${lead.email}`}>{lead.email}</a>}
-            <span>Pehli baar aayi: {fmt(lead.createdAt)}</span>
-            {lead.lastWebhookAt && <span>Last aayi: {fmt(lead.lastWebhookAt)}</span>}
+            {!lead.subscriberId.startsWith("ig:") && <SyncButton id={lead.id} />}
+            {(lead.igConversationId || lead.igId) && <InstagramChatRefreshButton id={lead.id} />}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusSelect key={lead.status} id={lead.id} status={lead.status} />
-          {lead.liveChatUrl && (
-            <a href={lead.liveChatUrl} target="_blank" rel="noreferrer" className="btn-secondary">
-              💬 ManyChat Live Chat
-            </a>
-          )}
-          {!lead.subscriberId.startsWith("ig:") && <SyncButton id={lead.id} />}
-          {(lead.igConversationId || lead.igId) && <InstagramChatRefreshButton id={lead.id} />}
+
+        {(lead.phone || lead.email) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {lead.phone && (
+              <a href={`tel:${lead.phone}`} className="btn-secondary">
+                <Phone className="h-4 w-4" /> {lead.phone}
+              </a>
+            )}
+            {lead.phone && (
+              <a href={`https://wa.me/${lead.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="btn-secondary text-green-700">
+                <MessageCircle className="h-4 w-4" /> WhatsApp
+              </a>
+            )}
+            {lead.email && (
+              <a href={`mailto:${lead.email}`} className="btn-secondary max-w-full">
+                <Mail className="h-4 w-4 shrink-0" /> <span className="truncate">{lead.email}</span>
+              </a>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
+          <span>Pehli baar aayi: {fmt(lead.createdAt)}</span>
+          {lead.lastWebhookAt && <span>Last aayi: {fmt(lead.lastWebhookAt)}</span>}
+          {lead.source && <span>Source: {lead.source}</span>}
         </div>
       </div>
 
@@ -87,11 +109,11 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               <h2 className="mb-3 font-medium">
                 Instagram chat <span className="text-xs font-normal text-slate-400">(IST · Instagram sirf last 20 messages deta hai)</span>
               </h2>
-              <div className="max-h-[28rem] space-y-2 overflow-y-auto rounded-lg bg-slate-50 p-3">
+              <div className="max-h-[28rem] space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3">
                 {lead.messages.map((m) => (
                   <div key={m.id} className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}>
                     <div
-                      className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                      className={`max-w-[85%] rounded-2xl sm:max-w-[75%] px-3 py-2 text-sm ${
                         m.fromMe ? "bg-indigo-600 text-white" : "border border-slate-200 bg-white text-slate-900"
                       }`}
                     >
@@ -115,7 +137,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             ) : (
               <ul className="space-y-3">
                 {lead.notes.map((n) => (
-                  <li key={n.id} className="rounded-lg bg-slate-50 p-3">
+                  <li key={n.id} className="rounded-xl bg-slate-50 p-3">
                     <p className="whitespace-pre-wrap text-sm">{n.body}</p>
                     <div className="mt-1 flex justify-between text-xs text-slate-400">
                       <span>{fmt(n.createdAt)}</span>
@@ -175,7 +197,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             )}
           </div>
 
-          <DeleteLeadButton id={lead.id} />
+          {user.role === "ADMIN" && <DeleteLeadButton id={lead.id} />}
         </div>
       </div>
     </AppShell>
@@ -185,7 +207,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
 function Field({ label, defaultValue, ...rest }: { label: string; name: string; type?: string; defaultValue?: string | null; placeholder?: string }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-slate-500">{label}</span>
+      <span className="label">{label}</span>
       <input className="input" defaultValue={defaultValue ?? ""} {...rest} />
     </label>
   );

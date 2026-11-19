@@ -4,6 +4,7 @@ import { statusMeta } from "@/lib/statuses";
 import { parseJson } from "@/lib/leads";
 import { istDayKey } from "@/lib/time";
 import { parseLeadFilters } from "@/lib/leadFilters";
+import { getCurrentUser } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,6 +21,7 @@ function safeText(v: string | null | undefined) {
 }
 
 export async function GET(req: Request) {
+  if (!(await getCurrentUser())) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   // Leads page wale hi filters (search, status, date range) — page/size nahi, saari matching leads
   const { where } = parseLeadFilters(Object.fromEntries(new URL(req.url).searchParams));
   const leads = await prisma.lead.findMany({

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
-import { AppShell } from "@/components/AppShell";
+import { AppShell, PageHeader } from "@/components/AppShell";
+import { requireUser } from "@/lib/users";
 import { isManyChatConfigured } from "@/lib/manychat";
 import { getIgAccount, hasIgToken } from "@/lib/instagram";
 import { lastInstagramSync } from "@/lib/instagramSync";
@@ -8,6 +9,7 @@ import { InstagramImport } from "@/components/InstagramImport";
 import { fmtIST } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Setup" };
 
 const BODY = `{
   "subscriber_id": "{{user_id}}",
@@ -25,6 +27,8 @@ export default async function SetupPage({
   searchParams: Promise<{ ig_ok?: string; ig_error?: string }>;
 }) {
   const sp = await searchParams;
+  const user = await requireUser();
+  const isAdmin = user.role === "ADMIN";
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
@@ -53,7 +57,7 @@ export default async function SetupPage({
 
   return (
     <AppShell>
-      <h1 className="mb-6 text-2xl font-semibold">Setup</h1>
+      <PageHeader title="Setup" sub="Instagram DMs aur ManyChat webhook connect karo." />
 
       <div className="card mb-6 space-y-5 p-5 text-sm leading-relaxed">
         <div>
@@ -82,12 +86,12 @@ export default async function SetupPage({
           </li>
         </ul>
 
-        {sp.ig_ok && <div className="rounded-lg bg-green-50 p-3 text-green-800">✓ Token save ho gaya — @{sp.ig_ok} connected</div>}
-        {sp.ig_error && <div className="rounded-lg bg-red-50 p-3 text-red-700">Token save nahi hua: {sp.ig_error}</div>}
+        {sp.ig_ok && <div className="alert-ok">✓ Token save ho gaya — @{sp.ig_ok} connected</div>}
+        {sp.ig_error && <div className="alert-error">Token save nahi hua: {sp.ig_error}</div>}
 
         <InstagramImport disabled={!igAccount} />
 
-        <details className="rounded-lg border border-slate-200 p-4" open={!igAccount}>
+        <details className="rounded-xl border border-slate-200 p-4" open={!igAccount}>
           <summary className="cursor-pointer font-medium">Instagram token kaise banaye (ek baar ka kaam)</summary>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-700">
             <li>
@@ -109,10 +113,14 @@ export default async function SetupPage({
           </ol>
         </details>
 
-        <form action={saveInstagramToken} className="flex flex-wrap gap-2">
-          <input name="token" type="password" className="input max-w-xl flex-1" placeholder="Instagram access token (IGAA…)" autoComplete="off" />
-          <button className="btn-primary">Save token</button>
-        </form>
+        {isAdmin ? (
+          <form action={saveInstagramToken} className="flex flex-col gap-2 sm:flex-row">
+            <input name="token" type="password" className="input sm:max-w-xl sm:flex-1" placeholder="Instagram access token (IGAA…)" autoComplete="off" />
+            <button className="btn-primary">Save token</button>
+          </form>
+        ) : (
+          <p className="text-slate-500">Token sirf Admin save kar sakta hai.</p>
+        )}
       </div>
 
       <h2 className="mb-4 text-lg font-semibold">ManyChat</h2>
@@ -142,7 +150,7 @@ export default async function SetupPage({
           Jis automation se lead aati hai (comment → DM, story reply, keyword), usme <b>trigger ke turant baad, sabse pehle</b> →{" "}
           <b>+ Action → Dev Tools → External Request</b>. Agar ye sirf flow ke end me ho (phone/email milne ke baad), to jo log beech me
           chhod dete hain wo CRM me kabhi nahi aate.
-          <div className="mt-2 rounded-lg bg-amber-50 p-3 text-amber-900">
+          <div className="alert-warn mt-2">
             ⚠️ Har automation (har reel / keyword / story / DM flow) me ye External Request alag se lagana padta hai. Jis flow me nahi
             laga, uski leads CRM me nahi aayengi. Phone/email baad me mile to flow ke end me ek aur External Request laga do — same
             lead update ho jayegi.
@@ -192,7 +200,7 @@ function Code({ label, children }: { label: string; children: string }) {
   return (
     <div>
       <div className="mb-1 text-xs text-slate-500">{label}</div>
-      <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">{children}</pre>
+      <pre className="overflow-x-auto rounded-xl bg-slate-900 p-3 text-xs break-all whitespace-pre-wrap text-slate-100 sm:break-normal sm:whitespace-pre">{children}</pre>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { fromISTInput } from "@/lib/time";
 import { syncLeadInstagramChat } from "@/lib/instagramSync";
 import { getIgAccount, IG_TOKEN_KEY } from "@/lib/instagram";
 import { setSetting } from "@/lib/settings";
+import { requireAdmin, requireUser } from "@/lib/users";
 
 function refresh(id: string) {
   revalidatePath(`/leads/${id}`);
@@ -18,6 +19,7 @@ function refresh(id: string) {
 }
 
 export async function updateLeadStatus(id: string, status: string) {
+  await requireUser();
   if (!isValidStatus(status)) throw new Error("Invalid status");
   const lead = await prisma.lead.findUniqueOrThrow({ where: { id } });
   if (lead.status === status) return;
@@ -42,6 +44,7 @@ export async function updateLeadStatus(id: string, status: string) {
 }
 
 export async function updateLeadDetails(id: string, formData: FormData) {
+  await requireUser();
   const get = (k: string) => {
     const v = String(formData.get(k) ?? "").trim();
     return v === "" ? null : v;
@@ -65,6 +68,7 @@ export async function updateLeadDetails(id: string, formData: FormData) {
 }
 
 export async function addNote(id: string, formData: FormData) {
+  await requireUser();
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return;
   await prisma.note.create({ data: { leadId: id, body: body.slice(0, 5000) } });
@@ -72,11 +76,13 @@ export async function addNote(id: string, formData: FormData) {
 }
 
 export async function deleteNote(noteId: string, leadId: string) {
+  await requireUser();
   await prisma.note.delete({ where: { id: noteId } });
   refresh(leadId);
 }
 
 export async function syncLeadFromManyChat(id: string) {
+  await requireUser();
   if (!isManyChatConfigured()) return { ok: false, error: "MANYCHAT_API_TOKEN .env me set karo" };
   const lead = await prisma.lead.findUniqueOrThrow({ where: { id } });
   if (lead.subscriberId.startsWith("ig:")) {
@@ -92,6 +98,7 @@ export async function syncLeadFromManyChat(id: string) {
 }
 
 export async function deleteLead(id: string) {
+  await requireAdmin();
   await prisma.lead.delete({ where: { id } });
   revalidatePath("/leads");
   revalidatePath("/");
@@ -99,6 +106,7 @@ export async function deleteLead(id: string) {
 }
 
 export async function refreshLeadInstagramChat(id: string) {
+  await requireUser();
   try {
     const stats = await syncLeadInstagramChat(id);
     refresh(id);
@@ -110,6 +118,7 @@ export async function refreshLeadInstagramChat(id: string) {
 
 /** Setup page se Instagram access token save karna (pehle check karta hai ki token chal raha hai) */
 export async function saveInstagramToken(formData: FormData) {
+  await requireAdmin();
   const token = String(formData.get("token") ?? "").trim();
   if (!token) redirect("/setup?ig_error=" + encodeURIComponent("Token khali hai"));
   let username = "";
