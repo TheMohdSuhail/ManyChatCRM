@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/users";
-import { AppShell, PageHeader } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
 import { Initials } from "@/components/Nav";
 import { fmtIST } from "@/lib/time";
 import { AddUserForm, UserRowActions } from "./UserControls";
@@ -16,7 +16,7 @@ export default async function UsersPage() {
   });
 
   return (
-    <AppShell>
+    <>
       <PageHeader title="Team" sub="Kaun CRM me login kar sakta hai. Admin sirf ek hai (aap); yahan se team Members add karo jo leads par kaam karein." />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -59,6 +59,6 @@ export default async function UsersPage() {
           <AddUserForm />
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

@@ -1,9 +1,11 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
+import { requireUser } from "@/lib/users";
 import { prisma } from "@/lib/prisma";
 import { STATUSES } from "@/lib/statuses";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES, RANGE_PRESETS, parseLeadFilters } from "@/lib/leadFilters";
 import { parseJson } from "@/lib/leads";
-import { AppShell, PageHeader } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, Download, Filter, Inbox, Phone, Search, X } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Avatar";
@@ -32,16 +34,18 @@ export default async function LeadsPage({
   const f = parseLeadFilters(await searchParams);
   const { q, status, range, size, where } = f;
 
-  const count = await prisma.lead.count({ where });
+  // Jo lead sabse last aayi (nayi ya wapas aane wali) wo sabse upar
+  const orderBy: Prisma.LeadOrderByWithRelationInput[] = [{ lastWebhookAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }];
+  // count + rows ek saath (pehle ek ke baad ek chalti thi = double wait)
+  const [, count, firstTry] = await Promise.all([
+    requireUser(),
+    prisma.lead.count({ where }),
+    prisma.lead.findMany({ where, orderBy, skip: (f.page - 1) * size, take: size }),
+  ]);
   const pages = Math.max(1, Math.ceil(count / size));
   const page = Math.min(f.page, pages);
-  // Jo lead sabse last aayi (nayi ya wapas aane wali) wo sabse upar
-  const leads = await prisma.lead.findMany({
-    where,
-    orderBy: [{ lastWebhookAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
-    skip: (page - 1) * size,
-    take: size,
-  });
+  // Purana link jisme page number ab zyada hai — sirf tab dobara query
+  const leads = page === f.page ? firstTry : await prisma.lead.findMany({ where, orderBy, skip: (page - 1) * size, take: size });
   const firstRow = count === 0 ? 0 : (page - 1) * size + 1;
   const lastRow = Math.min(page * size, count);
 
@@ -57,7 +61,7 @@ export default async function LeadsPage({
   const advancedOpen = Boolean(f.from || f.to || size !== DEFAULT_PAGE_SIZE);
 
   return (
-    <AppShell>
+    <>
       <PageHeader
         title={
           <>
@@ -328,6 +332,6 @@ export default async function LeadsPage({
           </nav>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

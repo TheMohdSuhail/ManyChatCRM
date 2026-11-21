@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { AppShell, PageHeader } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
 import { requireUser } from "@/lib/users";
 import { isManyChatConfigured } from "@/lib/manychat";
 import { getIgAccount, hasIgToken } from "@/lib/instagram";
@@ -42,21 +42,23 @@ export default async function SetupPage({
   ];
 
   // Instagram connection status
-  const igTokenSet = await hasIgToken();
-  let igAccount: string | null = null;
-  let igError: string | null = null;
-  if (igTokenSet) {
-    try {
-      const a = await getIgAccount();
-      igAccount = a.username ?? a.id;
-    } catch (e) {
-      igError = e instanceof Error ? e.message : String(e);
-    }
-  }
-  const igLastSync = await lastInstagramSync();
+  // Instagram check aur last sync time ek saath (pehle ek ke baad ek)
+  const [ig, igLastSync] = await Promise.all([
+    hasIgToken().then(async (set): Promise<{ set: boolean; account: string | null; error: string | null }> => {
+      if (!set) return { set, account: null, error: null };
+      try {
+        const a = await getIgAccount();
+        return { set, account: a.username ?? a.id, error: null };
+      } catch (e) {
+        return { set, account: null, error: e instanceof Error ? e.message : String(e) };
+      }
+    }),
+    lastInstagramSync(),
+  ]);
+  const { set: igTokenSet, account: igAccount, error: igError } = ig;
 
   return (
-    <AppShell>
+    <>
       <PageHeader title="Setup" sub="Instagram DMs aur ManyChat webhook connect karo." />
 
       <div className="card mb-6 space-y-5 p-5 text-sm leading-relaxed">
@@ -180,7 +182,7 @@ export default async function SetupPage({
           Lead <code>subscriber_id</code> se unique hai — duplicate nahi banegi, sirf update hogi aur Activity me entry aayegi.
         </Step>
       </div>
-    </AppShell>
+    </>
   );
 }
 

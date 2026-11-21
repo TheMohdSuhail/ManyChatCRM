@@ -47,6 +47,7 @@ model Lead {
   @@index([status])
   @@index([createdAt])
   @@index([lastWebhookAt])
+  @@index([followUpAt])
 }
 
 model Note {
@@ -55,6 +56,8 @@ model Note {
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   body      String
   createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
 }
 
 model Activity {
@@ -64,6 +67,9 @@ model Activity {
   type      String // CREATED | WEBHOOK | STATUS | SYNC | UPDATE
   message   String
   createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([type, createdAt])
 }
 
 // Instagram DM messages (Instagram Conversations API se import)
@@ -78,6 +84,7 @@ model Message {
   createdAt   DateTime @default(now())
 
   @@index([leadId, sentAt])
+  @@index([sentAt])
 }
 
 // CRM login users. role: ADMIN (users manage kar sakta hai) | MEMBER

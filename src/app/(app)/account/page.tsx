@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/users";
-import { AppShell, PageHeader } from "@/components/AppShell";
+import { PageHeader } from "@/components/AppShell";
 import { Initials } from "@/components/Nav";
 import { ChangePasswordForm, LogoutEverywhereButton, ProfileForm } from "./AccountForms";
 
@@ -9,7 +9,7 @@ export const metadata = { title: "My account" };
 export default async function AccountPage() {
   const me = await requireUser();
   return (
-    <AppShell>
+    <>
       <PageHeader title="My account" />
       <div className="grid max-w-4xl gap-6 md:grid-cols-2">
         <div className="card p-5">
@@ -34,6 +34,6 @@ export default async function AccountPage() {
           <LogoutEverywhereButton />
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

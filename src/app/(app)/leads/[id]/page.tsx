@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseJson } from "@/lib/leads";
 import { addNote, updateLeadDetails } from "@/app/actions";
-import { AppShell } from "@/components/AppShell";
 import { requireUser } from "@/lib/users";
 import { ArrowLeft, Mail, MessageCircle, Phone } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
@@ -19,16 +18,18 @@ const toLocalInput = (d: Date | null) => toISTInput(d);
 
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const lead = await prisma.lead.findUnique({
-    where: { id },
-    include: {
-      notes: { orderBy: { createdAt: "desc" } },
-      activities: { orderBy: { createdAt: "desc" }, take: 50 },
-      messages: { orderBy: { sentAt: "asc" }, take: 200 },
-    },
-  });
+  const [user, lead] = await Promise.all([
+    requireUser(),
+    prisma.lead.findUnique({
+      where: { id },
+      include: {
+        notes: { orderBy: { createdAt: "desc" } },
+        activities: { orderBy: { createdAt: "desc" }, take: 50 },
+        messages: { orderBy: { sentAt: "asc" }, take: 200 },
+      },
+    }),
+  ]);
   if (!lead) notFound();
-  const user = await requireUser();
 
   const tags = parseJson<string[]>(lead.tags, []);
   const customFields = parseJson<Record<string, unknown>>(lead.customFields, {});
@@ -36,7 +37,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const note = addNote.bind(null, lead.id);
 
   return (
-    <AppShell>
+    <>
       <Link href="/leads" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900">
         <ArrowLeft className="h-4 w-4" /> All leads
       </Link>
@@ -200,7 +201,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           {user.role === "ADMIN" && <DeleteLeadButton id={lead.id} />}
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
 
